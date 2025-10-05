@@ -1,14 +1,16 @@
 from typing import Self
+
 import httpx
-from twisted.internet.defer import ensureDeferred
 
 from scrapy.crawler import Crawler
-from scrapy.http import HtmlResponse, JsonResponse, Response
-from scrapy.settings import BaseSettings
+from scrapy.http import HtmlResponse, JsonResponse, TextResponse
+from scrapy.utils.defer import deferred_from_coro
 
 
 class HTTPXDownloadHandler:
-    def __init__(self, settings: BaseSettings, crawler=None):
+    def __init__(self, settings, crawler=None):
+        # self.loop = set_asyncio_event_loop(None)
+
         self.settings = settings
 
     @classmethod
@@ -16,7 +18,7 @@ class HTTPXDownloadHandler:
         return cls(crawler.settings, crawler)
 
     def download_request(self, request, spider):
-        return ensureDeferred(self._download(request))
+        return deferred_from_coro(self._download(request))
 
     async def _download(self, request):
         async with httpx.AsyncClient() as client:
@@ -28,7 +30,9 @@ class HTTPXDownloadHandler:
                 timeout=10,
             )
             content_type = resp.headers.get("content-type", "").lower()
-            response_cls = Response
+            # if len(resp.content) > 2:
+            #     raise error.ConnectionAborted('Response content was larger than download_maxsize')
+            response_cls = TextResponse
             if "text/html" in content_type:
                 response_cls = HtmlResponse
             elif "application/json" in content_type or "json" in content_type:
@@ -36,7 +40,10 @@ class HTTPXDownloadHandler:
             return response_cls(
                 url=str(request.url),
                 status=resp.status_code,
-                headers=resp.headers,
+                headers=self._adapt_httpx_headers(resp.headers),
                 body=resp.content,
                 request=request,
             )
+
+    def _adapt_httpx_headers(self, headers):
+        return {h: headers.get_list(h) for h in headers}
