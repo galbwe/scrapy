@@ -206,7 +206,7 @@ def call_later(
     on whether asyncio support is available.
     """
     if is_asyncio_available():
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return CallLaterResult.from_asyncio(loop.call_later(delay, func, *args))
 
     from twisted.internet import reactor

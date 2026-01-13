@@ -507,11 +507,10 @@ class AsyncCrawlerRunner(CrawlerRunnerBase):
         return self._crawl(crawler, *args, **kwargs)
 
     def _crawl(self, crawler: Crawler, *args: Any, **kwargs: Any) -> asyncio.Task[None]:
-        # At this point the asyncio loop has been installed either by the user
-        # or by AsyncCrawlerProcess (but it isn't running yet, so no asyncio.create_task()).
-        loop = asyncio.get_event_loop()
         self.crawlers.add(crawler)
-        task = loop.create_task(crawler.crawl_async(*args, **kwargs))
+        task = asyncio.get_running_loop().create_task(
+            crawler.crawl_async(*args, **kwargs)
+        )
         self._active.add(task)
 
         def _done(_: asyncio.Task[None]) -> None:
@@ -744,6 +743,22 @@ class AsyncCrawlerProcess(CrawlerProcessBase, AsyncCrawlerRunner):
     def _stop_dfd(self) -> Deferred[Any]:
         return deferred_from_coro(self.stop())
 
+    def _crawl(self, crawler: Crawler, *args: Any, **kwargs: Any) -> asyncio.Task[None]:
+        # Unlike AsyncCrawlerRunner._crawl, this is called before start() so the
+        # event loop exists (installed in __init__) but isn't running yet.
+        loop = asyncio.get_event_loop()
+        self.crawlers.add(crawler)
+        task = loop.create_task(crawler.crawl_async(*args, **kwargs))
+        self._active.add(task)
+
+        def _done(_: asyncio.Task[None]) -> None:
+            self.crawlers.discard(crawler)
+            self._active.discard(task)
+            self.bootstrap_failed |= not getattr(crawler, "spider", None)
+
+        task.add_done_callback(_done)
+        return task
+
     def start(
         self, stop_after_crawl: bool = True, install_signal_handlers: bool = True
     ) -> None:
@@ -764,9 +779,13 @@ class AsyncCrawlerProcess(CrawlerProcessBase, AsyncCrawlerRunner):
         from twisted.internet import reactor
 
         if stop_after_crawl:
-            loop = asyncio.get_event_loop()
-            join_task = loop.create_task(self.join())
-            join_task.add_done_callback(self._stop_reactor)
+
+            def create_join_task() -> None:
+                loop = asyncio.get_running_loop()
+                join_task = loop.create_task(self.join())
+                join_task.add_done_callback(self._stop_reactor)
+
+            reactor.callWhenRunning(create_join_task)
 
         self._setup_reactor(install_signal_handlers)
         reactor.run(installSignalHandlers=install_signal_handlers)  # blocking call
