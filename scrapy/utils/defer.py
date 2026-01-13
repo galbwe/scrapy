@@ -491,7 +491,7 @@ def deferred_to_future(d: Deferred[_T]) -> Future[_T]:
     """
     if not is_asyncio_available():
         raise RuntimeError("deferred_to_future() requires AsyncioSelectorReactor.")
-    return d.asFuture(asyncio.get_event_loop())
+    return d.asFuture(asyncio.get_running_loop())
 
 
 def maybe_deferred_to_future(d: Deferred[_T]) -> Deferred[_T] | Future[_T]:

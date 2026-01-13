@@ -128,7 +128,6 @@ class Downloader:
         self._slot_gc_loop: AsyncioLoopingCall | LoopingCall = create_looping_call(
             self._slot_gc
         )
-        self._slot_gc_loop.start(60)
         self.per_slot_settings: dict[str, dict[str, Any]] = self.settings.getdict(
             "DOWNLOAD_SLOTS"
         )
@@ -138,6 +137,8 @@ class Downloader:
     def fetch(
         self, request: Request, spider: Spider | None = None
     ) -> Generator[Deferred[Any], Any, Response | Request]:
+        if not self._slot_gc_loop.running:
+            self._slot_gc_loop.start(60)
         self.active.add(request)
         try:
             return (

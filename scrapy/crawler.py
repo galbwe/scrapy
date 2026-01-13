@@ -785,7 +785,7 @@ class AsyncCrawlerProcess(CrawlerProcessBase, AsyncCrawlerRunner):
                 join_task = loop.create_task(self.join())
                 join_task.add_done_callback(self._stop_reactor)
 
-            reactor.callWhenRunning(create_join_task)
+            reactor.callLater(0, create_join_task)
 
         self._setup_reactor(install_signal_handlers)
         reactor.run(installSignalHandlers=install_signal_handlers)  # blocking call

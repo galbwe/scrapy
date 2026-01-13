@@ -145,8 +145,7 @@ class AsyncioLoopingCall:
         self._start_time = time.time()
         if now:
             self._call()
-        loop = asyncio.get_event_loop()
-        self._task = loop.create_task(self._loop())
+        self._task = asyncio.get_running_loop().create_task(self._loop())
 
     def _to_sleep(self) -> float:
         """Return the time to sleep until the next call."""
